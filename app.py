@@ -86,26 +86,33 @@ if city and veggie:
                 with cols[i]:
                     st.markdown(
                         f"**{row['日付']}**\n"
-                        f"{emoji}\n🌡 {int(tmin)}–{int(tmax)}℃\n☔ {rain:.1f}mm\n{mark}"
+                        f"{emoji}\n🌡 {int(tmin)}–{int(tmax)}℃\n{rain:.1f}mm\n{mark}"
                     )
 
-            st.subheader("\U0001F4CA 気温と降水量グラフ（14日間）")
 
+            st.subheader("\U0001F4CA 気温と降水量グラフ（14日間）")
+            weather_df["日付"] = pd.to_datetime(weather_df["日付"])
             # 折れ線グラフ（気温）
             temp_chart = alt.Chart(weather_df).transform_fold(
                 ["最低気温", "最高気温"], as_=["種別", "気温"]
             ).mark_line(point=True).encode(
                 x="日付:T",
                 y="気温:Q",
-                color=alt.Color("種別:N", scale=alt.Scale(
-                    domain=["最低気温", "最高気温"],
+                color=alt.Color(
+                    "種別:N",
+                    legend=None,  # ← これが凡例を非表示にするキー！
+                    scale=alt.Scale(
                     range=["blue", "red"]
-                ))
+                    )
+                )
             ).properties(width=700, height=300)
 
-            # 棒グラフ（降水量）
+            # グラフ用に日付を時系列型に変換
+            weather_df["日付"] = pd.to_datetime(weather_df["日付"])
+
+           # 棒グラフ（降水量）
             rain_chart = alt.Chart(weather_df).mark_bar(size=30, color="skyblue").encode(
-                x="日付:T",
+                x=alt.X("日付:T", axis=alt.Axis(format="%m/%d")),
                 y="降水量:Q"
             ).properties(width=700, height=200)
 
