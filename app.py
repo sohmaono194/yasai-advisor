@@ -1,30 +1,46 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import requests
 import datetime
 
-API_KEY = "593601d39e37635019eeb7ca5f49513e"
+# APIキー
+WEATHERBIT_API_KEY = "6acbf60d33334859a9be01f1d12dc4c7"
+OWM_API_KEY = "593601d39e37635019eeb7ca5f49513e"
 
+# CSV読み込み
 df = pd.read_csv("野菜栽培条件データ.csv")
 
-st.title("🌱 野菜の種まき・定植時期カレンダー")
+st.title("🌱 野菜の種まき・定植カレンダー（日本語地名＋14日対応）")
 
-location = st.text_input("地域を入力してください（例：東京都新宿区）")
+# 入力フォーム
+location = st.text_input("地域を日本語で入力（例：東京、札幌、大阪など）")
 veggie = st.selectbox("育てたい野菜を選んでください", df["野菜名"].tolist())
 
-def get_lat_lon(place, api_key):
-    url = f"http://api.openweathermap.org/geo/1.0/direct?q={place}&limit=1&appid={api_key}"
+# 地名→緯度経度（日本語対応）
+def get_lat_lon_japanese_name(japanese_name):
+    url = f"http://api.openweathermap.org/geo/1.0/direct?q={japanese_name}&limit=1&appid={OWM_API_KEY}"
     res = requests.get(url).json()
     if res:
-        return res[0]["lat"], res[0]["lon"]
-    return None, None
+        lat = res[0]["lat"]
+        lon = res[0]["lon"]
+        name = res[0]["name"]
+        st.info(f"📍 入力地名: {japanese_name} → {name}（緯度: {lat}, 経度: {lon}）")
+        return lat, lon
+    else:
+        st.error("地名が見つかりませんでした。市や区レベルで入力してみてください。")
+        return None, None
 
-def get_weather(lat, lon, api_key):
-    url = f"https://api.openweathermap.org/data/2.5/onecall?lat={lat}&lon={lon}&exclude=current,minutely,hourly,alerts&units=metric&lang=ja&appid={api_key}"
-    res = requests.get(url).json()
-    return res["daily"]
+# 緯度経度→Weatherbit天気
+def get_weatherbit_by_latlon(lat, lon, api_key):
+    url = f"https://api.weatherbit.io/v2.0/forecast/daily?lat={lat}&lon={lon}&lang=ja&key={api_key}"
+    res = requests.get(url)
+    if res.status_code != 200:
+        st.error(f"APIエラー: {res.status_code} - {res.text}")
+        return None
+    data = res.json()
+    return data.get("data", None)
 
+# 天気→絵文字
 def weather_to_emoji(description):
     if "雨" in description:
         return "🌧️"
@@ -37,38 +53,38 @@ def weather_to_emoji(description):
     else:
         return "🌤️"
 
+# 実行ロジック
 if location and veggie:
-    lat, lon = get_lat_lon(location, API_KEY)
-    if lat is None:
-        st.error("場所が見つかりませんでした。")
-    else:
-        weather_data = get_weather(lat, lon, API_KEY)
-        veg = df[df["野菜名"] == veggie].iloc[0]
+    lat, lon = get_lat_lon_japanese_name(location)
+    if lat is not None:
+        weather_data = get_weatherbit_by_latlon(lat, lon, WEATHERBIT_API_KEY)
+        if weather_data:
+            veg = df[df["野菜名"] == veggie].iloc[0]
+            st.subheader(f"📅 今後14日間のカレンダー（{location}）")
 
-        st.subheader(f"📅 今後7日間のカレンダー（{location}）")
+            for row in range(2):  # 2行 × 7列
+                cols = st.columns(7)
+                for i in range(7):
+                    index = row * 7 + i
+                    if index >= len(weather_data):
+                        continue
+                    day = weather_data[index]
+                    date = day["datetime"]
+                    temp_min = day["min_temp"]
+                    temp_max = day["max_temp"]
+                    rain = day["precip"]
+                    weather = day["weather"]["description"]
+                    emoji = weather_to_emoji(weather)
 
-        days = []
-        for day in weather_data[:7]:
-            date = datetime.datetime.fromtimestamp(day["dt"]).strftime('%m/%d（%a）')
-            temp_min = day["temp"]["min"]
-            temp_max = day["temp"]["max"]
-            rain = day.get("rain", 0)
-            weather = day["weather"][0]["description"]
-            emoji = weather_to_emoji(weather)
+                    temp_ok = veg["種まき適温(最低)"] <= temp_min and temp_max <= veg["種まき適温(最高)"]
+                    rain_ok = (
+                        (veg["雨の好み"] == "好き" and rain >= 1) or
+                        (veg["雨の好み"] == "普通") or
+                        (veg["雨の好み"] == "嫌い" and rain == 0)
+                    )
+                    mark = "✅" if (temp_ok and rain_ok) else "❌"
 
-            temp_ok = veg["種まき適温(最低)"] <= temp_min and temp_max <= veg["種まき適温(最高)"]
-            rain_ok = (
-                (veg["雨の好み"] == "好き" and rain >= 1) or
-                (veg["雨の好み"] == "普通") or
-                (veg["雨の好み"] == "嫌い" and rain == 0)
-            )
-            mark = "🟢✅" if (temp_ok and rain_ok) else "🔴❌"
-
-            days.append(
-                f"**{date}**\n{emoji} {weather}\n🌡 {int(temp_min)}–{int(temp_max)}℃\n☔ {rain}mm\n{mark}"
-            )
-
-        cols = st.columns(7)
-        for i in range(7):
-            with cols[i]:
-                st.markdown(days[i])
+                    with cols[i]:
+                        st.markdown(
+                            f"**{date}**\n{emoji} {weather}\n🌡 {int(temp_min)}–{int(temp_max)}℃\n☔ {rain:.1f}mm\n{mark}"
+                        )
