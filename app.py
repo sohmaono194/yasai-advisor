@@ -8,13 +8,13 @@ import datetime
 df = pd.read_csv("野菜栽培条件データ.csv")
 df.columns = df.columns.str.strip()
 
-st.title("\U0001F331 野菜の種まき・定植カレンダー（Open-Meteo対応）")
+st.title("🌱 野菜の種まき・定植カレンダー（Open-Meteo対応）")
 
 # 地名と野菜を選択
 city = st.text_input("地域名（例：東京、札幌、大阪など）")
 veggie = st.selectbox("育てたい野菜を選んでください", df["野菜名"].tolist())
 
-# 地名 → 緯度経度（OpenWeatherMapで変換）
+# 緯度経度取得（OpenWeatherMapのAPI使用）
 def get_lat_lon(city_name):
     OWM_API_KEY = "593601d39e37635019eeb7ca5f49513e"
     url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=1&appid={OWM_API_KEY}"
@@ -24,29 +24,32 @@ def get_lat_lon(city_name):
     else:
         return None, None, None
 
-# Open-Meteo APIから天気データ取得
+# Open-Meteo APIから14日間の天気取得
 @st.cache_data(ttl=3600)
 def get_openmeteo_weather(lat, lon):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
         f"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum"
+        f"&forecast_days=14"
         f"&timezone=Asia%2FTokyo"
     )
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
         daily = data["daily"]
-        return pd.DataFrame({
-            "日付": daily["time"],
+        df = pd.DataFrame({
+            "日付": pd.to_datetime(daily["time"]),
             "最低気温": daily["temperature_2m_min"],
             "最高気温": daily["temperature_2m_max"],
             "降水量": daily["precipitation_sum"]
         })
+        return df
     else:
+        st.error(f"天気データの取得に失敗しました（{response.status_code}）")
         return None
 
-# 絵文字簡易変換（降水量に応じて）
+# 降水量に応じた簡易天気絵文字
 def rain_to_emoji(rain):
     if rain == 0:
         return "☀️"
@@ -63,54 +66,46 @@ if city and veggie:
     if lat:
         weather_df = get_openmeteo_weather(lat, lon)
         if weather_df is not None:
+
             veg = df[df["野菜名"] == veggie].iloc[0]
-            st.subheader(f"\U0001F5D3️ 14日間の天気と適性チェック（{name}）")
+            st.subheader(f"📅 14日間の天気と適性チェック（{name}）")
 
-            # カレンダー表示（7日分）
-            cols = st.columns(7)
-            for i in range(7):
-                row = weather_df.iloc[i]
-                tmin = row["最低気温"]
-                tmax = row["最高気温"]
-                rain = row["降水量"]
-                emoji = rain_to_emoji(rain)
+            # 14日を7日×2行で表示
+            for i in range(0, min(14, len(weather_df)), 7):
+                week_df = weather_df.iloc[i:i+7]
+                cols = st.columns(len(week_df))
+                for j, row in enumerate(week_df.itertuples(index=False)):
+                    tmin = row.最低気温
+                    tmax = row.最高気温
+                    rain = row.降水量
+                    emoji = rain_to_emoji(rain)
 
-                temp_ok = veg["種まき適温(最低)"] <= tmin and tmax <= veg["種まき適温(最高)"]
-                rain_ok = (
-                    (veg["雨の好み"] == "好き" and rain >= 1) or
-                    (veg["雨の好み"] == "普通") or
-                    (veg["雨の好み"] == "嫌い" and rain == 0)
-                )
-                mark = "✅" if temp_ok and rain_ok else "❌"
-
-                with cols[i]:
-                    st.markdown(
-                        f"**{row['日付']}**\n"
-                        f"{emoji}\n🌡 {int(tmin)}–{int(tmax)}℃\n{rain:.1f}mm\n{mark}"
+                    temp_ok = veg["種まき適温(最低)"] <= tmin and tmax <= veg["種まき適温(最高)"]
+                    rain_ok = (
+                        (veg["雨の好み"] == "好き" and rain >= 1) or
+                        (veg["雨の好み"] == "普通") or
+                        (veg["雨の好み"] == "嫌い" and rain == 0)
                     )
+                    mark = "✅" if temp_ok and rain_ok else "❌"
 
+                    with cols[j]:
+                        st.markdown(
+                            f"**{row.日付.strftime('%m/%d')}**\n"
+                            f"{emoji}\n🌡 {int(tmin)}–{int(tmax)}℃\n{rain:.1f}mm\n{mark}"
+                        )
 
-            st.subheader("\U0001F4CA 気温と降水量グラフ（14日間）")
-            weather_df["日付"] = pd.to_datetime(weather_df["日付"])
+            st.subheader("📊 気温と降水量グラフ（14日間）")
+
             # 折れ線グラフ（気温）
             temp_chart = alt.Chart(weather_df).transform_fold(
                 ["最低気温", "最高気温"], as_=["種別", "気温"]
             ).mark_line(point=True).encode(
-                x="日付:T",
+                x=alt.X("日付:T", axis=alt.Axis(format="%m/%d")),
                 y="気温:Q",
-                color=alt.Color(
-                    "種別:N",
-                    legend=None,  # ← これが凡例を非表示にするキー！
-                    scale=alt.Scale(
-                    range=["blue", "red"]
-                    )
-                )
+                color=alt.Color("種別:N", legend=None, scale=alt.Scale(range=["blue", "red"]))
             ).properties(width=700, height=300)
 
-            # グラフ用に日付を時系列型に変換
-            weather_df["日付"] = pd.to_datetime(weather_df["日付"])
-
-           # 棒グラフ（降水量）
+            # 棒グラフ（降水量）
             rain_chart = alt.Chart(weather_df).mark_bar(size=30, color="skyblue").encode(
                 x=alt.X("日付:T", axis=alt.Axis(format="%m/%d")),
                 y="降水量:Q"
