@@ -10,7 +10,7 @@ OWM_API_KEY = "593601d39e37635019eeb7ca5f49513e"
 # CSV読み込み
 df = pd.read_csv("野菜栽培条件データ.csv")
 
-st.title("🌱 野菜の種まき・定植カレンダー（日本語地名＋14日対応）")
+st.title("🌱 野菜の種まき・定植カレンダー（日本語地名＋7日対応）")
 
 # 入力フォーム
 location = st.text_input("地域を日本語で入力（例：東京、札幌、大阪など）")
@@ -60,7 +60,7 @@ if location and veggie:
         weather_data = get_weatherbit_by_latlon(lat, lon, WEATHERBIT_API_KEY)
         if weather_data:
             veg = df[df["野菜名"] == veggie].iloc[0]
-            st.subheader(f"📅 今後14日間のカレンダー（{location}）")
+            st.subheader(f"📅 今後7日間のカレンダー（{location}）")
 
             for row in range(2):  # 2行 × 7列
                 cols = st.columns(7)
