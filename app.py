@@ -98,8 +98,8 @@ if location and veggie:
                 ["最低気温", "最高気温"],
                 as_=["種別", "気温"]
             ).mark_line(point=True).encode(
-                x="日付:T",
-                y="気温:Q",
+                  x="日付:T",
+                  y="気温:Q",
                 color=alt.Color("種別:N",
                     scale=alt.Scale(
                         domain=["最低気温", "最高気温"],
@@ -109,9 +109,9 @@ if location and veggie:
             ).properties(width=700, height=300)
 
             # 棒グラフ（降水量）
-            rain_chart = alt.Chart(chart_df).mark_bar(color="skyblue").encode(
-                x="日付:T",
-                y="降水量:Q"
+            rain_chart = alt.Chart(chart_df).mark_bar(size=30,color="skyblue").encode(
+                      x="日付:T",
+                      y="降水量:Q"
             ).properties(width=700, height=200)
 
             st.altair_chart(temp_chart)
