@@ -157,14 +157,19 @@ if city and veggie:
                 if not rain_ok:
                     st.markdown("- 雨の条件に合っていません。")
 
+            # 定植予定日を自動計算して表示
+
             # ✅ 進捗バー
             st.subheader("⏳ 発芽・定植までの進捗")
             sow_date = st.date_input("🌱 種まき日を選んでください", datetime.date.today())
             today = datetime.date.today()
             days_passed = (today - sow_date).days
             progress = min(max(days_passed / total_days, 0), 1.0)
+            planting_date = sow_date + datetime.timedelta(days=total_days)
+            st.info(f"📅 定植予定日：**{planting_date.strftime('%Y年%m月%d日')}**（{speed_option}）")
             st.progress(progress)
             st.write(f"経過日数: {max(days_passed, 0)}日 / {total_days}日")
+
 
         else:
             st.error("Open-Meteoから天気を取得できませんでした。")
