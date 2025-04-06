@@ -84,6 +84,11 @@ if city and veggies:
 
                 # 適性チェック（各日）
                 results = []
+                temp_ok_count = 0
+                rain_ok_count = 0
+                both_ok_count = 0
+                suitable_dates = []
+
                 for row in weather_df.itertuples(index=False):
                     tmin = row.最低気温
                     tmax = row.最高気温
@@ -96,12 +101,38 @@ if city and veggies:
                         (veg["雨の好み"] == "普通") or
                         (veg["雨の好み"] == "嫌い" and rain == 0)
                     )
+
+                    if temp_ok: temp_ok_count += 1
+                    if rain_ok: rain_ok_count += 1
+                    if temp_ok and rain_ok:
+                        both_ok_count += 1
+                        suitable_dates.append(date_str)
+
                     mark = "✅" if temp_ok and rain_ok else "❌"
                     results.append((date_str, mark))
 
                 result_df = pd.DataFrame(results, columns=["日付", "適性"])
                 st.subheader("📆 種まき適性チェック（14日間）")
                 st.table(result_df)
+
+                # 判定
+                st.subheader("🧠 判定：今植えても大丈夫？")
+                if both_ok_count > 0:
+                    st.success(f"✅ 今は植えるのに適したタイミングです！（14日中 {both_ok_count} 日）")
+                    st.markdown("**理由：**")
+                    st.markdown(f"- 気温が適している日数：{temp_ok_count}日")
+                    st.markdown(f"- 雨が条件に合っている日数：{rain_ok_count}日")
+                    st.markdown(f"- 両方条件を満たす日数：{both_ok_count}日")
+                    st.markdown(f"**おすすめ日：** {', '.join(suitable_dates)}")
+                else:
+                    st.warning("⚠️ 今後14日間に種まきに適した日はありません。")
+                    st.markdown("**理由：**")
+                    if temp_ok_count == 0:
+                        st.markdown("- 気温が適正範囲外です。")
+                    if rain_ok_count == 0:
+                        st.markdown("- 降水条件が合いません。")
+                    if temp_ok_count > 0 and rain_ok_count > 0:
+                        st.markdown("- 条件は別々には合うが、同時に合う日がありません。")
 
                 # グラフ表示
                 st.subheader("📊 気温と降水量グラフ（14日間）")
@@ -121,14 +152,6 @@ if city and veggies:
 
                 st.altair_chart(temp_chart)
                 st.altair_chart(rain_chart)
-
-                # 今植えるべきか
-                st.subheader("🧠 判定：今植えても大丈夫？")
-                has_good_day = any(mark == "✅" for _, mark in results)
-                if has_good_day:
-                    st.success("✅ 今は植えるのに適したタイミングです！（少なくとも1日は条件が合っています）")
-                else:
-                    st.warning("⚠️ 今後14日間に種まきに適した日はありません。")
 
                 # 定植までの進捗
                 st.subheader("⏳ 発芽・定植までの進捗")
