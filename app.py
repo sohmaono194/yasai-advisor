@@ -19,7 +19,7 @@ speed_offset = {"早め": -7, "普通": 0, "遅め": 7}[speed_option]
 
 # 地名と野菜を選択
 city = st.text_input("地域名（例：Tokyo、Osaka、Sapporoなど）")
-veggie = st.selectbox("育てたい野菜を選んでください", df["野菜名"].tolist())
+veggies = st.multiselect("育てたい野菜を最大5つ選んでください", df["野菜名"].tolist(), max_selections=5)
 
 # 緯度経度取得
 def get_lat_lon(city_name):
@@ -68,11 +68,25 @@ def rain_to_emoji(rain):
         return "⛈️"
 
 # メイン処理
-if city and veggie:
+# メイン処理
+if city and veggies:  # ← 注意: 変数が veggie から veggies に変わってます（複数）
     lat, lon, name = get_lat_lon(city)
     if lat:
         weather_df = get_openmeteo_weather(lat, lon)
         if weather_df is not None:
+
+            for veggie in veggies:  # 複数の野菜をループ処理
+                st.header(f"🥬 {veggie} の栽培アドバイス")
+
+                veg = df[df["野菜名"] == veggie].iloc[0]
+                base_days = int(veg["定植までの日数"])
+                adjusted_days = max(base_days + speed_offset, 0)
+                total_days = adjusted_days
+
+                st.info(f"📌 {veggie} の定植までの日数は {base_days} 日 → {adjusted_days} 日（{speed_option}）")
+
+                # ↓↓↓ 以下、現在の「天気表示・判定・進捗バー」の処理をそのままここにインデントして入れる ↓↓↓
+
 
             # 選択された野菜のデータ取得
             veg = df[df["野菜名"] == veggie].iloc[0]
